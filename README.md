@@ -24,7 +24,7 @@ const exchange = new ExchangeContract(nodeAddress, ["private-key-1", "private-ke
 
 Module to manage EOSDT positions. Methods:
 
--   `exchange` - Exchange a given amount of currency.
+-   `exchange` - exchange a given amount of currency.
 -   `getPair` - returns currency pair object for given currencies.
 -   `getAllPairs` - returns an array of all currency pairs objects.
 -   `getToken` - returns token object for specified currency.
@@ -45,7 +45,7 @@ const nodeAddress = "http://jungle2.cryptolions.io:80"
 
 // Change or add private keys used to sign transactions here. This one is from Jungle
 // testnet account "exampleaccnt"
-const privateKeys = ["5JEVy6QujTsFzxWtBbQrG53vkszRybabE4wSyA2Tg1uZFEeVPks"]
+const privateKeys = ["5J5ks3bbRNtQFm7cZwJ6mbiWQoxoMtUDzLG7BAtcmagi5h9Mp5N"]
 const accountName = "exampleaccnt"
 
 const exchange = new ExchangeContract(nodeAddress, privateKeys)
@@ -66,5 +66,6 @@ await exchange.exchange(accountName, "EOS", "EOSDT", 10)
 ### Exchange rates
 
 ```Javascript
+// Getting current conversion rate from EOS to EOSDT
 let rate = await exchange.getExchangeRate("EOS", "EOSDT")
 ```
