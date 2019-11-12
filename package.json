@@ -1,0 +1,27 @@
+{
+    "name": "equilibrium-exchange",
+    "version": "0.0.1",
+    "description": "JS library to execute eosdt-exchange contract methods",
+    "main": "./dist/index.js",
+    "scripts": {
+        "build": "tsc --build",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "author": "Equilibrium",
+    "license": "MIT",
+    "dependencies": {
+        "@types/node-fetch": "^2.5.2",
+        "@types/text-encoding": "0.0.35",
+        "eosjs": "^20.0.0",
+        "node-fetch": "^2.6.0",
+        "text-encoding": "^0.7.0"
+    },
+    "devDependencies": {
+        "typescript": "^3.6.4"
+    },
+    "repository": {
+        "type": "git",
+        "url": "TODO"
+    },
+    "homepage": "TODO"
+}
