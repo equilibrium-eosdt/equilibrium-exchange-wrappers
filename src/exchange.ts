@@ -1,53 +1,57 @@
 import { Api, JsonRpc } from "eosjs"
-import { EosdtConnectorInterface } from "./interfaces/connector"
-import { ExchangePair, ExchangeSettings, ExchangeToken } from "./interfaces/exchange"
+import { JsSignatureProvider } from "eosjs/dist/eosjs-jssig"
+import Fetch from "node-fetch"
+import { IExchangePair, IExchangeSettings, IExchangeToken } from "./interfaces/exchange"
 import { ITrxParamsArgument } from "./interfaces/transaction"
 import { amountToAssetString, getTokenAccount, setTransactionParams } from "./utils"
 
 export class ExchangeContract {
-    private contractName: string
-    private rpc: JsonRpc
-    private api: Api
+    private readonly contractName: string = "equiexchange"
+    public readonly rpc: JsonRpc
+    public readonly api: Api
 
-    constructor(connector: EosdtConnectorInterface) {
-        this.rpc = connector.rpc
-        this.api = connector.api
-        this.contractName = "eosdtxchange"
+    constructor(nodeAddress: string, privateKeys: string[]) {
+        const fetch: any = Fetch // Workaroung to avoid incompatibility of fetch types in 'eosjs' and 'node-fetch'
+        this.rpc = new JsonRpc(nodeAddress, { fetch })
+        const signatureProvider = new JsSignatureProvider(privateKeys)
+        this.api = new Api({
+            rpc: this.rpc,
+            signatureProvider,
+            textDecoder: new TextDecoder(),
+            textEncoder: new TextEncoder()
+        })
     }
 
-    public async getSettings(): Promise<ExchangeSettings> {
+    public async getSettings(): Promise<IExchangeSettings> {
         const table = await this.rpc.get_table_rows({
             code: this.contractName,
             scope: this.contractName,
-            table: "xchsettings",
-            json: true
+            table: "xchsettings"
         })
         return table.rows[0]
     }
 
-    public async getAllPairs(): Promise<ExchangePair[]> {
+    public async getAllPairs(): Promise<IExchangePair[]> {
         const table = await this.rpc.get_table_rows({
             code: this.contractName,
             scope: this.contractName,
             table: "xchpairs",
-            json: true,
             limit: 10_000
         })
         return table.rows
     }
 
-    public async getAllTokens(): Promise<ExchangeToken[]> {
+    public async getAllTokens(): Promise<IExchangeToken[]> {
         const table = await this.rpc.get_table_rows({
             code: this.contractName,
             scope: this.contractName,
             table: "xchtokens",
-            json: true,
             limit: 10_000
         })
         return table.rows
     }
 
-    public async getToken(tokenSymbol: string): Promise<ExchangeToken | undefined> {
+    public async getToken(tokenSymbol: string): Promise<IExchangeToken | undefined> {
         const tokens = await this.getAllTokens()
         return tokens.find(token => token.token_symbol.split(",")[1] === tokenSymbol)
     }
@@ -55,7 +59,7 @@ export class ExchangeContract {
     public async getPair(
         fromCurrency: string,
         toCurrency: string
-    ): Promise<ExchangePair | undefined> {
+    ): Promise<IExchangePair | undefined> {
         const allPairs = await this.getAllPairs()
         return allPairs.find(pair => {
             const base = pair.base_currency.split(",")[1]
@@ -102,5 +106,49 @@ export class ExchangeContract {
             }
         )
         return receipt
+    }
+
+    public async getExchangeRate(
+        fromCurrency: string,
+        toCurrency: string
+    ): Promise<number | undefined> {
+        const pair = await this.getPair(fromCurrency, toCurrency)
+        if (!pair) throw new Error(`Pair ${fromCurrency}/${toCurrency} does not exist`)
+
+        const oracleName = "eosdtorclize"
+
+        const rates = (
+            await this.rpc.get_table_rows({
+                code: oracleName,
+                scope: oracleName,
+                table: "orarates",
+                limit: 100
+            })
+        ).rows
+
+        let ratesMap = new Map<string, number>()
+
+        ratesMap.set("EOS", 1)
+        for (const rate of rates) {
+            const symbol = rate.rate.match(/[A-Z]+/g)![0]
+            const value = parseFloat(rate.rate)
+            ratesMap.set(symbol, value)
+        }
+
+        const fromKey = fromCurrency === "EOSDT" ? "USD" : fromCurrency
+        const toKey = toCurrency === "EOSDT" ? "USD" : toCurrency
+
+        if (!(ratesMap.has(fromKey) && ratesMap.has(toKey))) {
+            return undefined
+        }
+
+        let rate = ratesMap.get(fromKey)! / ratesMap.get(toKey)!
+
+        rate *=
+            pair.base_currency == fromCurrency
+                ? 1 - pair.sell_slippage
+                : 1.0 / (1 + pair.buy_slippage)
+
+        return rate
     }
 }

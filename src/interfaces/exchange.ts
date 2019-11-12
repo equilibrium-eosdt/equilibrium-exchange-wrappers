@@ -1,4 +1,4 @@
-export interface ExchangePair {
+export interface IExchangePair {
     pair_id: number
     base_currency: string
     quote_currency: string
@@ -10,14 +10,14 @@ export interface ExchangePair {
     price_type: 0 | 1
 }
 
-export interface ExchangeSettings {
+export interface IExchangeSettings {
     oraclize_account: string
     manager_account: string
     rates_timeout: number
     settings_id: number
 }
 
-export interface ExchangeToken {
+export interface IExchangeToken {
     token_symbol: string
     token_account: string
 }

@@ -18,7 +18,6 @@ const node_fetch_1 = __importDefault(require("node-fetch"));
 const utils_1 = require("./utils");
 class ExchangeContract {
     constructor(nodeAddress, privateKeys) {
-        this.contractName = "equiexchange";
         const fetch = node_fetch_1.default; // Workaroung to avoid incompatibility of fetch types in 'eosjs' and 'node-fetch'
         this.rpc = new eosjs_1.JsonRpc(nodeAddress, { fetch });
         const signatureProvider = new eosjs_jssig_1.JsSignatureProvider(privateKeys);
@@ -28,13 +27,15 @@ class ExchangeContract {
             textDecoder: new TextDecoder(),
             textEncoder: new TextEncoder()
         });
+        this.contractName = "eosdtxchange";
     }
     getSettings() {
         return __awaiter(this, void 0, void 0, function* () {
             const table = yield this.rpc.get_table_rows({
                 code: this.contractName,
                 scope: this.contractName,
-                table: "xchsettings"
+                table: "xchsettings",
+                json: true
             });
             return table.rows[0];
         });
@@ -45,6 +46,7 @@ class ExchangeContract {
                 code: this.contractName,
                 scope: this.contractName,
                 table: "xchpairs",
+                json: true,
                 limit: 10000
             });
             return table.rows;
@@ -56,6 +58,7 @@ class ExchangeContract {
                 code: this.contractName,
                 scope: this.contractName,
                 table: "xchtokens",
+                json: true,
                 limit: 10000
             });
             return table.rows;
@@ -107,36 +110,39 @@ class ExchangeContract {
             return receipt;
         });
     }
-    getExchangeRate(fromCurrency, toCurrency) {
+    getRate(fromCurrency, toCurrency) {
         return __awaiter(this, void 0, void 0, function* () {
             const pair = yield this.getPair(fromCurrency, toCurrency);
             if (!pair)
                 throw new Error(`Pair ${fromCurrency}/${toCurrency} does not exist`);
-            const oracleName = "eosdtorclize";
+            const oracleName = (yield this.getSettings()).oraclize_account;
             const rates = (yield this.rpc.get_table_rows({
                 code: oracleName,
                 scope: oracleName,
                 table: "orarates",
+                json: true,
                 limit: 100
             })).rows;
             let ratesMap = new Map();
-            ratesMap.set("EOS", 1);
             for (const rate of rates) {
                 const symbol = rate.rate.match(/[A-Z]+/g)[0];
-                const value = parseFloat(rate.rate);
+                const value = utils_1.balanceToNumber(rate.rate);
                 ratesMap.set(symbol, value);
             }
-            const fromKey = fromCurrency === "EOSDT" ? "USD" : fromCurrency;
-            const toKey = toCurrency === "EOSDT" ? "USD" : toCurrency;
-            if (!(ratesMap.has(fromKey) && ratesMap.has(toKey))) {
-                return undefined;
+            let rate;
+            rate = ratesMap.get(fromCurrency);
+            if (rate === undefined) {
+                rate = ratesMap.get(toCurrency);
+                if (rate === undefined) {
+                    return undefined;
+                }
+                rate = 1.0 / rate;
             }
-            let rate = ratesMap.get(fromKey) / ratesMap.get(toKey);
             rate *=
                 pair.base_currency == fromCurrency
                     ? 1 - pair.sell_slippage
                     : 1.0 / (1 + pair.buy_slippage);
-            return rate;
+            return 0;
         });
     }
 }

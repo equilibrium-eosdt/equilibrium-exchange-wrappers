@@ -1,15 +1,16 @@
-import { EosdtConnectorInterface } from "./interfaces/connector";
-import { ExchangePair, ExchangeSettings, ExchangeToken } from "./interfaces/exchange";
+import { Api, JsonRpc } from "eosjs";
+import { IExchangePair, IExchangeSettings, IExchangeToken } from "./interfaces/exchange";
 import { ITrxParamsArgument } from "./interfaces/transaction";
 export declare class ExchangeContract {
-    private contractName;
-    private rpc;
-    private api;
-    constructor(connector: EosdtConnectorInterface);
-    getSettings(): Promise<ExchangeSettings>;
-    getAllPairs(): Promise<ExchangePair[]>;
-    getAllTokens(): Promise<ExchangeToken[]>;
-    getToken(tokenSymbol: string): Promise<ExchangeToken | undefined>;
-    getPair(fromCurrency: string, toCurrency: string): Promise<ExchangePair | undefined>;
+    private readonly contractName;
+    readonly rpc: JsonRpc;
+    readonly api: Api;
+    constructor(nodeAddress: string, privateKeys: string[]);
+    getSettings(): Promise<IExchangeSettings>;
+    getAllPairs(): Promise<IExchangePair[]>;
+    getAllTokens(): Promise<IExchangeToken[]>;
+    getToken(tokenSymbol: string): Promise<IExchangeToken | undefined>;
+    getPair(fromCurrency: string, toCurrency: string): Promise<IExchangePair | undefined>;
     exchange(sender: string, fromCurrency: string, toCurrency: string, amount: number, transactionParams?: ITrxParamsArgument): Promise<any>;
+    getExchangeRate(fromCurrency: string, toCurrency: string): Promise<number | undefined>;
 }
