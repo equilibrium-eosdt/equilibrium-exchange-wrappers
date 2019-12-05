@@ -4,17 +4,19 @@ export interface IExchangePair {
     quote_currency: string
     total_base_balance: string
     total_quote_balance: string
-    buy_slippage: number
-    sell_slippage: number
+    buy_slippage: string
+    sell_slippage: string
     price_currency: string
-    price_type: 0 | 1
+    price_type: 0 | 1 | 2
+    manager_account: string
+    price: string
 }
 
 export interface IExchangeSettings {
     oraclize_account: string
-    manager_account: string
-    rates_timeout: number
+    rate_timeout: number
     settings_id: number
+    next_trade_id: number
 }
 
 export interface IExchangeToken {

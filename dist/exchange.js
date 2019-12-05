@@ -8,40 +8,21 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-const eosjs_1 = require("eosjs");
-const eosjs_jssig_1 = require("eosjs/dist/eosjs-jssig");
-const node_fetch_1 = __importDefault(require("node-fetch"));
 const utils_1 = require("./utils");
 class ExchangeContract {
-    constructor(nodeAddress, privateKeys) {
-        this.contractName = "equiexchange";
-        const fetch = node_fetch_1.default; // Workaroung to avoid incompatibility of fetch types in 'eosjs' and 'node-fetch'
-        this.rpc = new eosjs_1.JsonRpc(nodeAddress, { fetch });
-        const signatureProvider = new eosjs_jssig_1.JsSignatureProvider(privateKeys);
-        this.api = new eosjs_1.Api({
-            rpc: this.rpc,
-            signatureProvider,
-            textDecoder: new TextDecoder(),
-            textEncoder: new TextEncoder()
-        });
-    }
-    getSettings() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const table = yield this.rpc.get_table_rows({
+    constructor(connection) {
+        this.contractName = "eos2dtdotcom";
+        this.getSettings = () => __awaiter(this, void 0, void 0, function* () {
+            const table = yield this.connection.rpc.get_table_rows({
                 code: this.contractName,
                 scope: this.contractName,
                 table: "xchsettings"
             });
             return table.rows[0];
         });
-    }
-    getAllPairs() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const table = yield this.rpc.get_table_rows({
+        this.getAllPairs = () => __awaiter(this, void 0, void 0, function* () {
+            const table = yield this.connection.rpc.get_table_rows({
                 code: this.contractName,
                 scope: this.contractName,
                 table: "xchpairs",
@@ -49,10 +30,8 @@ class ExchangeContract {
             });
             return table.rows;
         });
-    }
-    getAllTokens() {
-        return __awaiter(this, void 0, void 0, function* () {
-            const table = yield this.rpc.get_table_rows({
+        this.getAllTokens = () => __awaiter(this, void 0, void 0, function* () {
+            const table = yield this.connection.rpc.get_table_rows({
                 code: this.contractName,
                 scope: this.contractName,
                 table: "xchtokens",
@@ -60,15 +39,11 @@ class ExchangeContract {
             });
             return table.rows;
         });
-    }
-    getToken(tokenSymbol) {
-        return __awaiter(this, void 0, void 0, function* () {
+        this.getToken = (tokenSymbol) => __awaiter(this, void 0, void 0, function* () {
             const tokens = yield this.getAllTokens();
             return tokens.find(token => token.token_symbol.split(",")[1] === tokenSymbol);
         });
-    }
-    getPair(fromCurrency, toCurrency) {
-        return __awaiter(this, void 0, void 0, function* () {
+        this.getPair = (fromCurrency, toCurrency) => __awaiter(this, void 0, void 0, function* () {
             const allPairs = yield this.getAllPairs();
             return allPairs.find(pair => {
                 const base = pair.base_currency.split(",")[1];
@@ -77,26 +52,23 @@ class ExchangeContract {
                     (base === toCurrency && quote == fromCurrency));
             });
         });
-    }
-    exchange(sender, fromCurrency, toCurrency, amount, transactionParams) {
-        return __awaiter(this, void 0, void 0, function* () {
+        this.exchange = (sender, fromCurrency, toCurrency, amount, transactionParams) => __awaiter(this, void 0, void 0, function* () {
             const pair = yield this.getPair(fromCurrency, toCurrency);
             if (!pair)
                 throw new Error(`Pair ${fromCurrency}/${toCurrency} does not exist`);
             const trxParams = utils_1.setTransactionParams(transactionParams);
             const authorization = [{ permission: trxParams.permission, actor: sender }];
-            const type = pair.base_currency.split(",")[1] === fromCurrency ? "sell" : "buy";
-            const receipt = yield this.api.transact({
+            const receipt = yield this.connection.api.transact({
                 actions: [
                     {
-                        account: utils_1.getTokenAccount(fromCurrency),
+                        account: yield this.getTokenAccount(fromCurrency),
                         name: "transfer",
                         authorization,
                         data: {
                             from: sender,
                             to: this.contractName,
-                            quantity: utils_1.amountToAssetString(amount, fromCurrency),
-                            memo: `{"pair_id": ${pair.pair_id}, "type": "${type}"}`
+                            quantity: yield this.amountToAssetString(amount, fromCurrency),
+                            memo: `{"pair_id": ${pair.pair_id}}`
                         }
                     }
                 ]
@@ -106,38 +78,63 @@ class ExchangeContract {
             });
             return receipt;
         });
-    }
-    getExchangeRate(fromCurrency, toCurrency) {
-        return __awaiter(this, void 0, void 0, function* () {
+        this.getExchangeRate = (fromCurrency, toCurrency) => __awaiter(this, void 0, void 0, function* () {
             const pair = yield this.getPair(fromCurrency, toCurrency);
             if (!pair)
                 throw new Error(`Pair ${fromCurrency}/${toCurrency} does not exist`);
-            const oracleName = "eosdtorclize";
-            const rates = (yield this.rpc.get_table_rows({
-                code: oracleName,
-                scope: oracleName,
-                table: "orarates",
-                limit: 100
-            })).rows;
-            let ratesMap = new Map();
-            ratesMap.set("EOS", 1);
-            for (const rate of rates) {
-                const symbol = rate.rate.match(/[A-Z]+/g)[0];
-                const value = parseFloat(rate.rate);
-                ratesMap.set(symbol, value);
+            let rate;
+            if (pair.price_type == 2) {
+                rate =
+                    pair.base_currency == fromCurrency
+                        ? 1.0 / parseFloat(pair.price)
+                        : parseFloat(pair.price);
             }
-            const fromKey = fromCurrency === "EOSDT" ? "USD" : fromCurrency;
-            const toKey = toCurrency === "EOSDT" ? "USD" : toCurrency;
-            if (!(ratesMap.has(fromKey) && ratesMap.has(toKey))) {
-                return undefined;
+            else {
+                const oracleName = "eosdtorclize";
+                const rates = (yield this.connection.rpc.get_table_rows({
+                    code: oracleName,
+                    scope: oracleName,
+                    table: "orarates",
+                    limit: 100
+                })).rows;
+                const ratesMap = new Map();
+                ratesMap.set("EOS", 1);
+                for (const rateEntry of rates) {
+                    const symbol = rateEntry.rate.match(/[A-Z]+/g)[0];
+                    const value = parseFloat(rateEntry.rate);
+                    ratesMap.set(symbol, value);
+                }
+                // EOSDT rate is equal to USD
+                const fromKey = fromCurrency === "EOSDT" ? "USD" : fromCurrency;
+                const toKey = toCurrency === "EOSDT" ? "USD" : toCurrency;
+                if (!(ratesMap.has(fromKey) && ratesMap.has(toKey))) {
+                    return undefined;
+                }
+                rate = ratesMap.get(toKey) / ratesMap.get(fromKey);
             }
-            let rate = ratesMap.get(fromKey) / ratesMap.get(toKey);
-            rate *=
-                pair.base_currency == fromCurrency
-                    ? 1 - pair.sell_slippage
-                    : 1.0 / (1 + pair.buy_slippage);
-            return rate;
+            const exchangeRate = rate *
+                (pair.base_currency == fromCurrency
+                    ? 1.0 / (1.0 + Number(pair.buy_slippage))
+                    : 1.0 - Number(pair.sell_slippage));
+            return exchangeRate;
         });
+        this.getTokenAccount = (assetSymbol) => __awaiter(this, void 0, void 0, function* () {
+            const token = yield this.getToken(assetSymbol);
+            if (token === undefined)
+                throw new Error(`Unknown token symbol ${assetSymbol}`);
+            return token.token_account;
+        });
+        this.amountToAssetString = (amount, assetSymbol) => __awaiter(this, void 0, void 0, function* () {
+            const token = yield this.getToken(assetSymbol);
+            if (token === undefined)
+                throw new Error(`Unknown token symbol ${assetSymbol}`);
+            const decimals = Number(token.token_symbol.split(",")[0]);
+            if (typeof amount === "string")
+                amount = parseFloat(amount);
+            assetSymbol = assetSymbol.toUpperCase();
+            return `${amount.toFixed(decimals)} ${assetSymbol}`;
+        });
+        this.connection = connection;
     }
 }
 exports.ExchangeContract = ExchangeContract;
