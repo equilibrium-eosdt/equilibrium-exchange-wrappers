@@ -1,6 +1,6 @@
 {
     "name": "@equilab/exchange",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "Package of wrappers to work with EOS contract \"equiexchange\"",
     "main": "./dist/index.js",
     "scripts": {

@@ -109,13 +109,15 @@ export class ExchangeContract {
         const pair = await this.getPair(fromCurrency, toCurrency)
         if (!pair) throw new Error(`Pair ${fromCurrency}/${toCurrency} does not exist`)
 
+        const pairBase = pair.base_currency.split(",")[1]
+
         let rate: number
 
         if (pair.price_type == 2) {
             rate =
-                pair.base_currency == fromCurrency
-                    ? 1.0 / parseFloat(pair.price)
-                    : parseFloat(pair.price)
+                pairBase == fromCurrency
+                    ? parseFloat(pair.price)
+                    : 1.0 / parseFloat(pair.price)
         } else {
             const oracleName = "eosdtorclize"
 
@@ -150,9 +152,9 @@ export class ExchangeContract {
 
         const exchangeRate =
             rate *
-            (pair.base_currency == fromCurrency
-                ? 1.0 / (1.0 + Number(pair.buy_slippage))
-                : 1.0 - Number(pair.sell_slippage))
+            (pairBase == fromCurrency
+                ? 1.0 - Number(pair.sell_slippage)
+                : 1.0 / (1.0 + Number(pair.buy_slippage)))
 
         return exchangeRate
     }
